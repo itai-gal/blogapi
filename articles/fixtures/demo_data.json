@@ -1,0 +1,42 @@
+[
+    {
+        "model": "auth.user",
+        "pk": 1,
+        "fields": {
+            "username": "admin",
+            "is_staff": true,
+            "is_superuser": true,
+            "password": "pbkdf2_sha256$390000$test$8mJbX0eZQG9o7dQ7q0/3O4m7Z0t7ZJ3A3g=="
+        }
+    },
+    {
+        "model": "auth.user",
+        "pk": 2,
+        "fields": {
+            "username": "itai",
+            "password": "pbkdf2_sha256$390000$test$8mJbX0eZQG9o7dQ7q0/3O4m7Z0t7ZJ3A3g=="
+        }
+    },
+    {
+        "model": "articles.article",
+        "pk": 1,
+        "fields": {
+            "title": "Hello Blog",
+            "content": "First article content",
+            "author": 2,
+            "is_published": true,
+            "created_at": "2025-01-01T10:00:00Z",
+            "updated_at": "2025-01-01T10:00:00Z"
+        }
+    },
+    {
+        "model": "articles.comment",
+        "pk": 1,
+        "fields": {
+            "article": 1,
+            "author": 2,
+            "content": "Nice post!",
+            "created_at": "2025-01-01T11:00:00Z"
+        }
+    }
+]

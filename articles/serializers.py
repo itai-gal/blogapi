@@ -9,7 +9,7 @@ class ArticleSerializer(ModelSerializer):
 
     class Meta:
         model = Article
-        fields = '__all__'
+        fields = "__all__"
 
     def get_author_id(self, obj):
         return obj.author.id
@@ -21,7 +21,14 @@ class CommentSerializer(ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = '__all__'
+        fields = "__all__"
 
     def get_author_id(self, obj):
         return obj.author.id
+
+
+class CommentCreateForArticleSerializer(CommentSerializer):
+    class Meta(CommentSerializer.Meta):
+        extra_kwargs = {
+            "article": {"read_only": True, "required": False}
+        }

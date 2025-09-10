@@ -25,9 +25,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=False, cast=bool)
+CORS_ALLOW_ALL_ORIGINS = config(
+    "CORS_ALLOW_ALL_ORIGINS", default="True").lower() == "true"
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'onrender.com']
+ALLOWED_HOSTS = [h for h in config(
+    "ALLOWED_HOSTS", default="*").split(",") if h]
 
 
 # Application definition
@@ -69,8 +71,8 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '1/day',
-        'user': '2/day'
+        'anon': '1000/min',
+        'user': '1000/min'
     },
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
@@ -80,9 +82,9 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Blog project API',
-    'DESCRIPTION': 'API documentation for the Blog project',
-    'VERSION': '1.0.0',
+    "TITLE": "Blog API",
+    "DESCRIPTION": "Articles & Comments API with JWT, search, ordering and nested comments path.",
+    "VERSION": "1.0.0",
     'SERVE_INCLUDE_SCHEMA': False,
     # OTHER SETTINGS
 }
@@ -191,8 +193,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
-    # BASE_DIR / "static",
-    # r"/var/www/static/",
 ]
 
 # Default primary key field type

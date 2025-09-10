@@ -4,7 +4,11 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django.shortcuts import get_object_or_404
 
 from .models import Article, Comment
-from .serializers import ArticleSerializer, CommentSerializer
+from .serializers import (
+    ArticleSerializer,
+    CommentSerializer,
+    CommentCreateForArticleSerializer,
+)
 from .permissions import IsOwnerOrAdmin
 
 
@@ -45,7 +49,10 @@ class CommentViewSet(viewsets.ModelViewSet):
 
 
 class ArticleCommentsView(generics.ListCreateAPIView):
-    serializer_class = CommentSerializer
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return CommentCreateForArticleSerializer
+        return CommentSerializer
 
     def get_permissions(self):
         return [AllowAny()] if self.request.method == "GET" else [IsAuthenticated()]
