@@ -4,11 +4,13 @@ from .models import Article, Comment, Tag, PostUserLikes
 
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "author", "is_published", "created_at")
+    list_display = ("id", "title", "slug", "author",
+                    "is_published", "created_at")
     list_filter = ("is_published", "created_at", "tags")
-    search_fields = ("title", "content", "author__username",
+    search_fields = ("title", "slug", "content", "author__username",
                      "author__first_name", "author__last_name")
     filter_horizontal = ("tags",)
+    prepopulated_fields = {"slug": ("title",)}
 
 
 @admin.register(Comment)

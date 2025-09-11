@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils.text import slugify
 
 
 class Tag(models.Model):
@@ -14,6 +15,7 @@ class Tag(models.Model):
 
 class Article(models.Model):
     title = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=280, unique=True, blank=True, null=True)
     content = models.TextField()
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -31,6 +33,19 @@ class Article(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.author})"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title)[:50] or "article"
+            candidate = base
+            idx = 1
+            while Article.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                idx += 1
+                candidate = f"{base}-{idx}"
+                if len(candidate) > 280:
+                    candidate = candidate[:279]
+            self.slug = candidate
+        super().save(*args, **kwargs)
 
 
 class Comment(models.Model):

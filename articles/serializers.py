@@ -12,6 +12,8 @@ class ArticleSerializer(ModelSerializer):
     )
     tag_names = serializers.SerializerMethodField(read_only=True)
 
+    slug = serializers.ReadOnlyField()
+
     class Meta:
         model = Article
         fields = "__all__"
@@ -24,19 +26,13 @@ class ArticleSerializer(ModelSerializer):
 
 
 class CommentSerializer(ModelSerializer):
-    """
-    סריאלייזר כללי ל-/api/comments/:
-    - דורש article בבקשה (POST)
-    """
     author = serializers.HiddenField(default=serializers.CurrentUserDefault())
     author_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
         fields = "__all__"
-        extra_kwargs = {
-            "article": {"required": True}
-        }
+        extra_kwargs = {"article": {"required": True}}
 
     def get_author_id(self, obj):
         return obj.author.id
@@ -54,15 +50,11 @@ class CommentNestedResponseSerializer(CommentSerializer):
     pass
 
 
-# ---------- Tags ----------
-
 class TagSerializer(ModelSerializer):
     class Meta:
         model = Tag
         fields = "__all__"
 
-
-# ---------- Likes (PostUserLikes) ----------
 
 class CurrentProfileDefault:
     requires_context = True
@@ -77,10 +69,8 @@ class PostUserLikesSerializer(ModelSerializer):
 
     class Meta:
         model = PostUserLikes
-        fields = "__all__"  # id, user, user_id, article, created_at
-        extra_kwargs = {
-            "article": {"required": True}
-        }
+        fields = "__all__"
+        extra_kwargs = {"article": {"required": True}}
 
     def get_user_id(self, obj):
         return obj.user.id
