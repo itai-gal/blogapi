@@ -1,50 +1,45 @@
+from uuid import uuid4
 from django.db import models
-from django.conf import settings
+from django.contrib.auth.models import User
 from django.utils.text import slugify
 
 
 class Tag(models.Model):
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=64, unique=True)
 
-    class Meta:
-        ordering = ["name"]
-
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
 class Article(models.Model):
     title = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=280, unique=True, blank=True, null=True)
     content = models.TextField()
+    slug = models.SlugField(max_length=280, unique=True, blank=True, null=True)
     author = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="articles",
-    )
+        User, on_delete=models.CASCADE, related_name="articles")
+    tags = models.ManyToManyField(Tag, blank=True, related_name="articles")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    is_published = models.BooleanField(default=True)
-
-    tags = models.ManyToManyField(Tag, blank=True, related_name="articles")
 
     class Meta:
         ordering = ["-created_at"]
 
-    def __str__(self):
-        return f"{self.title} ({self.author})"
+    def __str__(self) -> str:
+        return f"{self.title} ({self.slug})"
+
+    def _generate_unique_slug(self, base: str) -> str:
+        base = base or f"post-{uuid4().hex[:8]}"
+        candidate = base
+        i = 2
+        while Article.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+            candidate = f"{base}-{i}"
+            i += 1
+        return candidate
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            base = slugify(self.title)[:50] or "article"
-            candidate = base
-            idx = 1
-            while Article.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
-                idx += 1
-                candidate = f"{base}-{idx}"
-                if len(candidate) > 280:
-                    candidate = candidate[:279]
-            self.slug = candidate
+            base = slugify(self.title, allow_unicode=True)
+            self.slug = self._generate_unique_slug(base)
         super().save(*args, **kwargs)
 
 
@@ -52,33 +47,25 @@ class Comment(models.Model):
     article = models.ForeignKey(
         Article, on_delete=models.CASCADE, related_name="comments")
     author = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="comments")
+        User, on_delete=models.CASCADE, related_name="comments")
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["created_at"]
+        ordering = ["created_at", "id"]
 
-    def __str__(self):
-        return f"Comment by {self.author} on {self.article}"
+    def __str__(self) -> str:
+        return f"Comment #{self.pk} on {self.article_id}"
 
 
 class PostUserLikes(models.Model):
     user = models.ForeignKey(
-        "users.UserProfile",
-        on_delete=models.CASCADE,
-        related_name="likes",
-    )
+        "users.UserProfile", on_delete=models.CASCADE, related_name="likes")
     article = models.ForeignKey(
-        Article,
-        on_delete=models.CASCADE,
-        related_name="likes",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
+        Article, on_delete=models.CASCADE, related_name="likes")
 
     class Meta:
         unique_together = ("user", "article")
-        ordering = ["-created_at"]
 
-    def __str__(self):
-        return f"Like<{self.user_id} -> {self.article_id}>"
+    def __str__(self) -> str:
+        return f"Like u={self.user_id} a={self.article_id}"
