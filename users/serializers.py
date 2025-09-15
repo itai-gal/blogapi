@@ -38,5 +38,5 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ["id", "user_id", "bio", "avatar"]
+        fields = ["id", "user_id", "bio"]
         read_only_fields = ["id", "user_id"]

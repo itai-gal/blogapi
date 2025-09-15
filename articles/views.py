@@ -65,6 +65,9 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
         return qs
 
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
     @action(detail=True, methods=["post"], url_path="toggle-like")
     def toggle_like(self, request, pk=None):
         article = self.get_object()
@@ -97,6 +100,9 @@ class CommentViewSet(viewsets.ModelViewSet):
         article_id = self.request.query_params.get("article")
         return qs.filter(article_id=article_id) if article_id else qs
 
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
 
 class ArticleCommentsView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
@@ -117,8 +123,11 @@ class ArticleCommentsView(generics.ListCreateAPIView):
         req.is_valid(raise_exception=True)
         created = Comment.objects.create(
             article=article, author=request.user, content=req.validated_data["content"])
-        return Response(CommentNestedResponseSerializer(created, context={"request": request}).data,
-                        status=status.HTTP_201_CREATED)
+        return Response(
+            CommentNestedResponseSerializer(
+                created, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class TagViewSet(viewsets.ModelViewSet):
@@ -147,3 +156,7 @@ class PostUserLikesViewSet(viewsets.ModelViewSet):
             qs = qs.filter(
                 user=self.request.user.userprofile) if self.request.user.is_authenticated else qs.none()
         return qs
+
+    def perform_create(self, serializer):
+        profile, _ = UserProfile.objects.get_or_create(user=self.request.user)
+        serializer.save(user=profile)
