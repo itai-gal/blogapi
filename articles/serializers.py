@@ -14,6 +14,7 @@ class ArticleSerializer(serializers.ModelSerializer):
         queryset=Tag.objects.all(), many=True, required=False
     )
     tag_names = serializers.SerializerMethodField(read_only=True)
+    likes_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Article
@@ -24,15 +25,21 @@ class ArticleSerializer(serializers.ModelSerializer):
             "slug",
             "tags",
             "tag_names",
+            "likes_count",
             "created_at",
             "updated_at",
             "author_id",
         ]
-        read_only_fields = ["id", "slug", "created_at",
-                            "updated_at", "author_id", "tag_names"]
+        read_only_fields = [
+            "id", "slug", "created_at", "updated_at", "author_id",
+            "tag_names", "likes_count",
+        ]
 
     def get_tag_names(self, obj):
         return [t.name for t in obj.tags.all()]
+
+    def get_likes_count(self, obj):
+        return obj.likes.count()
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -51,9 +58,21 @@ class CommentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "author_id"]
 
+    def validate_content(self, value: str):
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Content cannot be empty.")
+        return cleaned
+
 
 class CommentCreateNestedRequestSerializer(serializers.Serializer):
     content = serializers.CharField(max_length=10_000)
+
+    def validate_content(self, value: str):
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise serializers.ValidationError("Content cannot be empty.")
+        return cleaned
 
 
 class CommentNestedResponseSerializer(serializers.ModelSerializer):

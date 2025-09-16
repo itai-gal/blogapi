@@ -5,20 +5,18 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticate
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from drf_spectacular.utils import extend_schema
 
 from .models import Article, Comment, Tag, PostUserLikes
 from .serializers import (
-    ArticleSerializer,
-    CommentSerializer,
-    CommentCreateNestedRequestSerializer,
-    CommentNestedResponseSerializer,
-    TagSerializer,
-    PostUserLikesSerializer,
+    ArticleSerializer, CommentSerializer, CommentCreateNestedRequestSerializer,
+    CommentNestedResponseSerializer, TagSerializer, PostUserLikesSerializer
 )
 from .permissions import IsOwnerOrAdmin
 from users.models import UserProfile
 
 
+@extend_schema(summary="Articles CRUD")
 class ArticleViewSet(viewsets.ModelViewSet):
     queryset = Article.objects.all().select_related(
         "author").prefetch_related("tags")
@@ -38,12 +36,10 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-
         tag = self.request.query_params.get("tag")
         if tag:
             qs = qs.filter(tags__id=int(tag)) if tag.isdigit(
             ) else qs.filter(tags__name__iexact=tag)
-
         tags = self.request.query_params.get("tags")
         if tags:
             parts = [p.strip() for p in tags.split(",") if p.strip()]
@@ -52,17 +48,14 @@ class ArticleViewSet(viewsets.ModelViewSet):
             if ids or names:
                 qs = qs.filter(Q(tags__id__in=ids) | Q(
                     tags__name__in=names)).distinct()
-
         author = self.request.query_params.get("author")
         if author:
             qs = qs.filter(author_id=int(author)) if author.isdigit(
             ) else qs.filter(author__username__iexact=author)
-
         mine = self.request.query_params.get("mine")
         if mine in ("1", "true", "True"):
             qs = qs.filter(
                 author=self.request.user) if self.request.user.is_authenticated else qs.none()
-
         return qs
 
     def perform_create(self, serializer):
@@ -84,6 +77,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(article).data, status=status.HTTP_200_OK)
 
 
+@extend_schema(summary="Comments CRUD")
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.select_related("author", "article").all()
     serializer_class = CommentSerializer
@@ -104,6 +98,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save(author=self.request.user)
 
 
+@extend_schema(summary="Article → Comments (nested)")
 class ArticleCommentsView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
 
@@ -123,19 +118,18 @@ class ArticleCommentsView(generics.ListCreateAPIView):
         req.is_valid(raise_exception=True)
         created = Comment.objects.create(
             article=article, author=request.user, content=req.validated_data["content"])
-        return Response(
-            CommentNestedResponseSerializer(
-                created, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
+        return Response(CommentNestedResponseSerializer(created, context={"request": request}).data,
+                        status=status.HTTP_201_CREATED)
 
 
+@extend_schema(summary="Tags CRUD")
 class TagViewSet(viewsets.ModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
 
 
+@extend_schema(summary="Likes CRUD (unpaginated list)")
 class PostUserLikesViewSet(viewsets.ModelViewSet):
     queryset = PostUserLikes.objects.select_related("user", "article").all()
     serializer_class = PostUserLikesSerializer
