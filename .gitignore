@@ -2,3 +2,8 @@
 .env
 __pycache__/
 staticfiles/
+/articles
+db.sqlite3
+staticfiles/
+.openapi/
+*.log
