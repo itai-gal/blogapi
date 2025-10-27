@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Article, Comment, Tag, PostUserLikes
+from drf_spectacular.utils import extend_schema_field, OpenApiTypes
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -35,9 +36,13 @@ class ArticleSerializer(serializers.ModelSerializer):
             "tag_names", "likes_count",
         ]
 
+    @extend_schema_field(
+        serializers.ListField(child=serializers.CharField())
+    )
     def get_tag_names(self, obj):
         return [t.name for t in obj.tags.all()]
 
+    @extend_schema_field(OpenApiTypes.INT)
     def get_likes_count(self, obj):
         return obj.likes.count()
 

@@ -5,9 +5,15 @@ from rest_framework.response import Response
 from django.contrib.auth.models import User
 from users.models import UserProfile
 from .serializers import UserSerializer, UserProfileSerializer
+from rest_framework import serializers as drf_serializers
+
+
+class EmptySerializer(drf_serializers.Serializer):
+    pass
 
 
 class AuthViewSet(viewsets.ViewSet):
+    serializer_class = EmptySerializer
 
     def get_permissions(self):
         return [AllowAny()] if self.action in ["create"] else [IsAuthenticated()]
@@ -47,3 +53,7 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         if mine in ("1", "true", "True") and self.request.user.is_authenticated:
             return qs.filter(user=self.request.user)
         return qs
+
+
+class EmptySerializer(drf_serializers.Serializer):
+    pass

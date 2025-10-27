@@ -100,13 +100,18 @@ class CommentViewSet(viewsets.ModelViewSet):
 
 @extend_schema(summary="Article → Comments (nested)")
 class ArticleCommentsView(generics.ListCreateAPIView):
+    queryset = Comment.objects.none()
     serializer_class = CommentSerializer
 
     def get_permissions(self):
         return [AllowAny()] if self.request.method == "GET" else [IsAuthenticated()]
 
     def get_queryset(self):
-        return Comment.objects.filter(article_id=self.kwargs["article_id"]).select_related("author", "article")
+        if getattr(self, "swagger_fake_view", False):
+            return Comment.objects.none()
+        return Comment.objects.filter(
+            article_id=self.kwargs["article_id"]
+        ).select_related("author", "article")
 
     def get_serializer_class(self):
         return CommentCreateNestedRequestSerializer if self.request.method == "POST" else CommentSerializer
@@ -117,9 +122,13 @@ class ArticleCommentsView(generics.ListCreateAPIView):
             data=request.data, context={"request": request})
         req.is_valid(raise_exception=True)
         created = Comment.objects.create(
-            article=article, author=request.user, content=req.validated_data["content"])
-        return Response(CommentNestedResponseSerializer(created, context={"request": request}).data,
-                        status=status.HTTP_201_CREATED)
+            article=article, author=request.user, content=req.validated_data["content"]
+        )
+        return Response(
+            CommentNestedResponseSerializer(
+                created, context={"request": request}).data,
+            status=status.HTTP_201_CREATED
+        )
 
 
 @extend_schema(summary="Tags CRUD")
