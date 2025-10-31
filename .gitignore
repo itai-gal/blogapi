@@ -8,3 +8,5 @@ staticfiles/
 static/
 openapi/
 *.log
+blogschema.yml
+db.sqlite3
