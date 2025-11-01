@@ -27,7 +27,7 @@ const RegisterPage: React.FC = () => {
     };
 
     return (
-        <div className="grid">
+        <div className="register-page">
             <div className="panel stack" style={{ maxWidth: 480, margin: "40px auto" }}>
                 <h2 className="title">Register</h2>
                 <form onSubmit={onSubmit} className="stack">

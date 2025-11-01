@@ -188,3 +188,14 @@ a:hover {
     border: 1px solid #202535;
     color: #9fb2ff;
 }
+
+.btn.icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.15s ease;
+}
+
+.btn.icon:active {
+    transform: scale(0.97);
+}

@@ -26,7 +26,7 @@ const LoginPage: React.FC = () => {
     };
 
     return (
-        <div className="grid">
+        <div className="page-login">
             <div className="panel stack" style={{ maxWidth: 480, margin: "40px auto" }}>
                 <h2 className="title">Login</h2>
                 <form onSubmit={onSubmit} className="stack">
@@ -37,7 +37,6 @@ const LoginPage: React.FC = () => {
                         <Link className="link" to="/register">Create account</Link>
                     </div>
                 </form>
-                <p className="muted">Tip: Press <span className="kbd">Enter</span> to submit</p>
             </div>
         </div>
     );

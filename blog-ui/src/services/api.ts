@@ -1,31 +1,61 @@
-export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+// token is read from localStorage in buildHeaders; avoid importing getToken here.
 
-function getToken() {
-    return localStorage.getItem("token") || "";
+export type JsonValue = unknown;
+
+function buildHeaders(base?: HeadersInit, hasBody?: boolean): HeadersInit {
+    const headers = new Headers(base || {});
+    // Authorization
+    // Read token from localStorage (safe check for SSR). Replace with your app's token getter if needed.
+    const token = (typeof window !== "undefined") ? (localStorage.getItem("token") ?? undefined) : undefined;
+    if (token && !headers.has("Authorization")) {
+        headers.set("Authorization", `Bearer ${token}`);
+    }
+    // JSON defaults if body exists
+    if (hasBody) {
+        if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+        if (!headers.has("Accept")) headers.set("Accept", "application/json");
+    }
+    return headers;
 }
 
-export async function apiFetch<T>(
-    url: string,
-    method: HttpMethod = "GET",
-    body?: unknown
-): Promise<T> {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const token = getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+/**
+ * Generic API fetcher.
+ * Usage:
+ *   apiFetch<T>(url)                         // GET
+ *   apiFetch<T>(url, { method: "POST", body: JSON.stringify(data) })
+ */
+export async function apiFetch<T = any>(input: string, init?: RequestInit): Promise<T> {
+    const hasBody = !!init?.body;
+    const finalInit: RequestInit = {
+        method: init?.method || "GET",
+        ...init,
+        headers: buildHeaders(init?.headers, hasBody),
+    };
 
-    const res = await fetch(url, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-    });
-
+    const res = await fetch(input, finalInit);
     if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
+        // Try to parse server error body for better DX
+        let detail: any = undefined;
         try {
-            const data = await res.json();
-            msg = JSON.stringify(data);
-        } catch { }
-        throw new Error(msg);
+            detail = await res.json();
+        } catch {
+            /* ignore */
+        }
+        const err = new Error(`HTTP ${res.status}`);
+        (err as any).status = res.status;
+        (err as any).detail = detail;
+        throw err;
     }
-    try { return (await res.json()) as T; } catch { return {} as T; }
+
+    // Handle empty response (204) gracefully
+    if (res.status === 204) return undefined as T;
+
+    const text = await res.text();
+    if (!text) return undefined as T;
+    try {
+        return JSON.parse(text) as T;
+    } catch {
+        // not JSON
+        return text as unknown as T;
+    }
 }
