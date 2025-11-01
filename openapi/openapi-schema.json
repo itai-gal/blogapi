@@ -8,7 +8,7 @@ paths:
   /api/articles/:
     get:
       operationId: api_articles_list
-      summary: Articles CRUD
+      description: קבלת רשימת מאמרים (כולל חיפוש, מיון ופג'ינציה)
       parameters:
       - name: ordering
         required: false
@@ -49,7 +49,6 @@ paths:
           description: ''
     post:
       operationId: api_articles_create
-      summary: Articles CRUD
       tags:
       - api
       requestBody:
@@ -77,37 +76,13 @@ paths:
   /api/articles/{article_id}/comments/:
     get:
       operationId: api_articles_comments_list
-      summary: Article → Comments (nested)
+      description: קבלת תגובות לפי מזהה מאמר
       parameters:
       - in: path
         name: article_id
         schema:
           type: integer
         required: true
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
       tags:
       - api
       security:
@@ -119,11 +94,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedCommentList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommentNestedResponse'
           description: ''
     post:
       operationId: api_articles_comments_create
-      summary: Article → Comments (nested)
+      description: הוספת תגובה למאמר לפי מזהה
       parameters:
       - in: path
         name: article_id
@@ -148,16 +125,15 @@ paths:
       - cookieAuth: []
       - jwtAuth: []
       responses:
-        '201':
+        '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommentCreateNestedRequest'
+                $ref: '#/components/schemas/CommentNestedResponse'
           description: ''
   /api/articles/{id}/:
     get:
       operationId: api_articles_retrieve
-      summary: Articles CRUD
       parameters:
       - in: path
         name: id
@@ -180,7 +156,6 @@ paths:
           description: ''
     put:
       operationId: api_articles_update
-      summary: Articles CRUD
       parameters:
       - in: path
         name: id
@@ -214,7 +189,6 @@ paths:
           description: ''
     patch:
       operationId: api_articles_partial_update
-      summary: Articles CRUD
       parameters:
       - in: path
         name: id
@@ -247,7 +221,6 @@ paths:
           description: ''
     delete:
       operationId: api_articles_destroy
-      summary: Articles CRUD
       parameters:
       - in: path
         name: id
@@ -263,65 +236,6 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/articles/{id}/toggle-like/:
-    post:
-      operationId: api_articles_toggle_like_create
-      summary: Articles CRUD
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this article.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Article'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Article'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Article'
-        required: true
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Article'
-          description: ''
-  /api/articles/by-slug/{slug}/:
-    get:
-      operationId: api_articles_by_slug_retrieve
-      summary: Articles CRUD
-      parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-          pattern: ^[-\w]+$
-        required: true
-      tags:
-      - api
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Article'
-          description: ''
   /api/auth/:
     post:
       operationId: api_auth_create
@@ -358,7 +272,6 @@ paths:
   /api/comments/:
     get:
       operationId: api_comments_list
-      summary: Comments CRUD
       parameters:
       - name: ordering
         required: false
@@ -399,7 +312,6 @@ paths:
           description: ''
     post:
       operationId: api_comments_create
-      summary: Comments CRUD
       tags:
       - api
       requestBody:
@@ -427,7 +339,6 @@ paths:
   /api/comments/{id}/:
     get:
       operationId: api_comments_retrieve
-      summary: Comments CRUD
       parameters:
       - in: path
         name: id
@@ -450,7 +361,6 @@ paths:
           description: ''
     put:
       operationId: api_comments_update
-      summary: Comments CRUD
       parameters:
       - in: path
         name: id
@@ -484,7 +394,6 @@ paths:
           description: ''
     patch:
       operationId: api_comments_partial_update
-      summary: Comments CRUD
       parameters:
       - in: path
         name: id
@@ -517,7 +426,6 @@ paths:
           description: ''
     delete:
       operationId: api_comments_destroy
-      summary: Comments CRUD
       parameters:
       - in: path
         name: id
@@ -536,7 +444,6 @@ paths:
   /api/post-user-likes/:
     get:
       operationId: api_post_user_likes_list
-      summary: Likes CRUD (unpaginated list)
       parameters:
       - name: ordering
         required: false
@@ -544,6 +451,18 @@ paths:
         description: Which field to use when ordering the results.
         schema:
           type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
       - name: search
         required: false
         in: query
@@ -555,19 +474,15 @@ paths:
       security:
       - cookieAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PostUserLikes'
+                $ref: '#/components/schemas/PaginatedPostUserLikesList'
           description: ''
     post:
       operationId: api_post_user_likes_create
-      summary: Likes CRUD (unpaginated list)
       tags:
       - api
       requestBody:
@@ -595,7 +510,6 @@ paths:
   /api/post-user-likes/{id}/:
     get:
       operationId: api_post_user_likes_retrieve
-      summary: Likes CRUD (unpaginated list)
       parameters:
       - in: path
         name: id
@@ -608,7 +522,6 @@ paths:
       security:
       - cookieAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -618,7 +531,6 @@ paths:
           description: ''
     put:
       operationId: api_post_user_likes_update
-      summary: Likes CRUD (unpaginated list)
       parameters:
       - in: path
         name: id
@@ -652,7 +564,6 @@ paths:
           description: ''
     patch:
       operationId: api_post_user_likes_partial_update
-      summary: Likes CRUD (unpaginated list)
       parameters:
       - in: path
         name: id
@@ -685,7 +596,6 @@ paths:
           description: ''
     delete:
       operationId: api_post_user_likes_destroy
-      summary: Likes CRUD (unpaginated list)
       parameters:
       - in: path
         name: id
@@ -701,238 +611,6 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/tags/:
-    get:
-      operationId: api_tags_list
-      summary: Tags CRUD
-      parameters:
-      - name: ordering
-        required: false
-        in: query
-        description: Which field to use when ordering the results.
-        schema:
-          type: string
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - name: search
-        required: false
-        in: query
-        description: A search term.
-        schema:
-          type: string
-      tags:
-      - api
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedTagList'
-          description: ''
-    post:
-      operationId: api_tags_create
-      summary: Tags CRUD
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Tag'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Tag'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Tag'
-        required: true
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tag'
-          description: ''
-  /api/tags/{id}/:
-    get:
-      operationId: api_tags_retrieve
-      summary: Tags CRUD
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this tag.
-        required: true
-      tags:
-      - api
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tag'
-          description: ''
-    put:
-      operationId: api_tags_update
-      summary: Tags CRUD
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this tag.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Tag'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Tag'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Tag'
-        required: true
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tag'
-          description: ''
-    patch:
-      operationId: api_tags_partial_update
-      summary: Tags CRUD
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this tag.
-        required: true
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedTag'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedTag'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedTag'
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Tag'
-          description: ''
-    delete:
-      operationId: api_tags_destroy
-      summary: Tags CRUD
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this tag.
-        required: true
-      tags:
-      - api
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-  /api/token/:
-    post:
-      operationId: api_token_create
-      description: |-
-        Takes a set of user credentials and returns an access and refresh JSON web
-        token pair to prove the authentication of those credentials.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TokenObtainPair'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/TokenObtainPair'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/TokenObtainPair'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenObtainPair'
-          description: ''
-  /api/token/refresh/:
-    post:
-      operationId: api_token_refresh_create
-      description: |-
-        Takes a refresh type JSON web token and returns an access type JSON web
-        token if the refresh token is valid.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TokenRefresh'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/TokenRefresh'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/TokenRefresh'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenRefresh'
-          description: ''
   /api/user-profiles/:
     get:
       operationId: api_user_profiles_list
@@ -1103,6 +781,60 @@ paths:
       responses:
         '204':
           description: No response body
+  /token/:
+    post:
+      operationId: token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /token/refresh/:
+    post:
+      operationId: token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
 components:
   schemas:
     Article:
@@ -1185,6 +917,30 @@ components:
           maxLength: 10000
       required:
       - content
+    CommentNestedResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        article:
+          type: integer
+          readOnly: true
+        author_id:
+          type: integer
+          readOnly: true
+      required:
+      - article
+      - author_id
+      - content
+      - created_at
+      - id
     PaginatedArticleList:
       type: object
       required:
@@ -1231,7 +987,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Comment'
-    PaginatedTagList:
+    PaginatedPostUserLikesList:
       type: object
       required:
       - count
@@ -1253,7 +1009,7 @@ components:
         results:
           type: array
           items:
-            $ref: '#/components/schemas/Tag'
+            $ref: '#/components/schemas/PostUserLikes'
     PaginatedUserProfileList:
       type: object
       required:
@@ -1344,15 +1100,6 @@ components:
           readOnly: true
         article:
           type: integer
-    PatchedTag:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        name:
-          type: string
-          maxLength: 64
     PatchedUserProfile:
       type: object
       properties:
@@ -1362,8 +1109,6 @@ components:
         user_id:
           type: integer
           readOnly: true
-        bio:
-          type: string
     PostUserLikes:
       type: object
       properties:
@@ -1379,18 +1124,6 @@ components:
       - article
       - id
       - user
-    Tag:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        name:
-          type: string
-          maxLength: 64
-      required:
-      - id
-      - name
     TokenObtainPair:
       type: object
       properties:
@@ -1432,8 +1165,6 @@ components:
         user_id:
           type: integer
           readOnly: true
-        bio:
-          type: string
       required:
       - id
       - user_id

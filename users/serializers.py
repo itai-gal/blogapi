@@ -1,7 +1,6 @@
 from django.contrib.auth.models import User
-from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from users.models import UserProfile
+from .models import UserProfile
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -9,14 +8,19 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email",
-                  "password", "first_name", "last_name"]
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "password",
+        ]
         read_only_fields = ["id"]
 
     def create(self, validated_data):
         password = validated_data.pop("password")
-        validate_password(password)
-        user = User.objects.create_user(**validated_data)
+        user = User(**validated_data)
         user.set_password(password)
         user.save()
         UserProfile.objects.get_or_create(user=user)
@@ -24,10 +28,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
-        for k, v in validated_data.items():
-            setattr(instance, k, v)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
         if password:
-            validate_password(password)
             instance.set_password(password)
         instance.save()
         return instance
@@ -38,5 +41,5 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ["id", "user_id", "bio"]
+        fields = ["id", "user_id"]
         read_only_fields = ["id", "user_id"]

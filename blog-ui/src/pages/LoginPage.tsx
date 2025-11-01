@@ -1,43 +1,47 @@
 import React, { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
-import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
 const LoginPage: React.FC = () => {
     const { login } = useAuth();
     const nav = useNavigate();
-    const [username, setU] = useState("");
-    const [password, setP] = useState("");
+    const [form, setForm] = useState({ username: "", password: "" });
     const [loading, setLoading] = useState(false);
 
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!username.trim() || !password) return toast.error("Please fill all fields");
         setLoading(true);
         try {
-            await login(username.trim(), password);
-            toast.success("Welcome back!");
+            await login(form.username.trim(), form.password);
             nav("/");
-        } catch (e: any) {
-            toast.error("Login failed");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="page-login">
-            <div className="panel stack" style={{ maxWidth: 480, margin: "40px auto" }}>
-                <h2 className="title">Login</h2>
-                <form onSubmit={onSubmit} className="stack">
-                    <input className="input" placeholder="Username" value={username} onChange={e => setU(e.target.value)} />
-                    <input className="input" placeholder="Password" type="password" value={password} onChange={e => setP(e.target.value)} />
-                    <div className="row">
-                        <button className="btn" type="submit" disabled={loading}>{loading ? "..." : "Login"}</button>
-                        <Link className="link" to="/register">Create account</Link>
-                    </div>
-                </form>
-            </div>
+        <div className="panel" style={{ maxWidth: 420, margin: "0 auto", padding: 24 }}>
+            <h2 className="title" style={{ marginBottom: 16 }}>Login</h2>
+            <form onSubmit={onSubmit} className="stack" style={{ gap: 12 }}>
+                <input
+                    className="input"
+                    placeholder="Username"
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: e.target.value })}
+                    required
+                />
+                <input
+                    className="input"
+                    placeholder="Password"
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    required
+                />
+                <button className="btn primary" disabled={loading}>
+                    {loading ? "..." : "Login"}
+                </button>
+            </form>
         </div>
     );
 };

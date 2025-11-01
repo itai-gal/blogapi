@@ -132,6 +132,10 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
 }
 
+SPECTACULAR_SETTINGS.update({
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+})
+
 # === CORS/CSRF (DEV) ===
 CORS_ALLOW_ALL_ORIGINS = config(
     "CORS_ALLOW_ALL_ORIGINS", default="True").lower() == "true"

@@ -1,67 +1,73 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { apiFetch } from "../services/api";
 import { ENDPOINTS } from "../services/endpoints";
 
-type User = {
-    id: number;
-    username: string;
-    email?: string;
-};
-
-type AuthState = {
+type User = { id: number; username: string; email?: string };
+type AuthContextValue = {
     user: User | null;
     loading: boolean;
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, password: string, email?: string) => Promise<void>;
     logout: () => void;
+    me: () => Promise<void>;
 };
 
-const AuthCtx = createContext<AuthState | null>(null);
+const AuthContext = createContext<AuthContextValue>({} as AuthContextValue);
+export const useAuth = () => useContext(AuthContext);
+
+const TOKEN_KEY = "access_token";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // טעינת משתמש מ־/api/me/ אם יש טוקן
+    // טוען משתמש אם יש טוקן
     useEffect(() => {
-        const token = localStorage.getItem("token");
-        if (!token) { setLoading(false); return; }
         (async () => {
             try {
-                const data = await apiFetch<{ user: User }>(ENDPOINTS.me);
-                setUser(data.user);
-            } catch {
-                localStorage.removeItem("token");
-            } finally {
+                const token = localStorage.getItem(TOKEN_KEY);
+                if (!token) return;
+                await me();
+            } catch { }
+            finally {
                 setLoading(false);
             }
         })();
     }, []);
 
+    const me = async () => {
+        const res = await apiFetch<{ user: User }>(ENDPOINTS.me, { method: "GET" });
+        setUser(res.user);
+    };
+
     const login = async (username: string, password: string) => {
-        const data = await apiFetch<{ access: string }>(ENDPOINTS.login, "POST", { username, password });
-        localStorage.setItem("token", data.access);
-        const me = await apiFetch<{ user: User }>(ENDPOINTS.me);
-        setUser(me.user);
+        const tokens = await apiFetch<{ access: string; refresh: string }>(ENDPOINTS.tokenObtain, {
+            method: "POST",
+            body: JSON.stringify({ username, password }),
+        });
+        localStorage.setItem(TOKEN_KEY, tokens.access);
+        await me();
+        toast.success("Logged in");
     };
 
     const register = async (username: string, password: string, email?: string) => {
-        await apiFetch(ENDPOINTS.register, "POST", { username, password, email });
+        await apiFetch(ENDPOINTS.register, {
+            method: "POST",
+            body: JSON.stringify({ username, password, email }),
+        });
         await login(username, password);
     };
 
     const logout = () => {
-        localStorage.removeItem("token");
+        localStorage.removeItem(TOKEN_KEY);
         setUser(null);
+        toast.success("Logged out");
     };
 
-    const value = useMemo(() => ({ user, loading, login, register, logout }), [user, loading]);
-
-    return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
-};
-
-export const useAuth = () => {
-    const ctx = useContext(AuthCtx);
-    if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-    return ctx;
+    return (
+        <AuthContext.Provider value={{ user, loading, login, register, logout, me }}>
+            {children}
+        </AuthContext.Provider>
+    );
 };

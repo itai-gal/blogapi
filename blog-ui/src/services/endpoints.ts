@@ -1,22 +1,16 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+const API_BASE =
+    import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 export const ENDPOINTS = {
-    // Articles
+    tokenObtain: `${API_BASE}/api/token/`,
+    tokenRefresh: `${API_BASE}/api/token/refresh/`,
+    me: `${API_BASE}/api/auth/me/`,
+    register: `${API_BASE}/api/auth/`,
     articles: `${API_BASE}/api/articles/`,
-    article: (id: number | string) => `${API_BASE}/api/articles/${id}/`,
-    articleComments: (id: number | string) => `${API_BASE}/api/articles/${id}/comments/`,
-
-    // Likes
+    article: (id: number) => `${API_BASE}/api/articles/${id}/`,
     postUserLikes: `${API_BASE}/api/post-user-likes/`,
-    postUserLikeDetail: (id: number | string) =>
-        `${API_BASE}/api/post-user-likes/${id}/`,
-
-    // --- Users / Auth ---
-    users: `${API_BASE}/api/users/`,
-    userDetail: (id: number | string) => `${API_BASE}/api/users/${id}/`,
-    login: `${API_BASE}/api/token/`,
-    me: `${API_BASE}/api/users/me/`,
-    register: `${API_BASE}/api/users/`,
+    postUserLikeDetail: (id: number) => `${API_BASE}/api/post-user-likes/${id}/`,
+    comments: `${API_BASE}/api/comments/`,
+    articleComments: (articleId: number) => `${API_BASE}/api/articles/${articleId}/comments/`,
 };
-
 export default ENDPOINTS;

@@ -53,7 +53,3 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         if mine in ("1", "true", "True") and self.request.user.is_authenticated:
             return qs.filter(user=self.request.user)
         return qs
-
-
-class EmptySerializer(drf_serializers.Serializer):
-    pass
