@@ -6,8 +6,18 @@ from django.dispatch import receiver
 
 class UserProfile(models.Model):
     user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="userprofile")
+        User,
+        on_delete=models.CASCADE,
+        related_name="userprofile",
+    )
     bio = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "User Profile"
+        verbose_name_plural = "User Profiles"
 
     def __str__(self):
         return f"Profile<{self.user.username}>"

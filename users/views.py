@@ -13,17 +13,34 @@ class EmptySerializer(drf_serializers.Serializer):
 
 
 class AuthViewSet(viewsets.ViewSet):
+    """
+    ViewSet לאימות/משתמשים:
+    - POST /api/auth/                  -> register
+    - POST /api/auth/register/         -> register
+    - GET/PATCH /api/auth/me/          -> info/update current user
+    """
     serializer_class = EmptySerializer
 
     def get_permissions(self):
-        return [AllowAny()] if self.action in ["create"] else [IsAuthenticated()]
+        open_actions = {"create", "register"}
+        return [AllowAny()] if self.action in open_actions else [IsAuthenticated()]
 
+    # POST /api/auth/
     def create(self, request):
         ser = UserSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         user = ser.save()
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
+    # POST /api/auth/register/
+    @action(detail=False, methods=["post"], url_path="register", permission_classes=[AllowAny])
+    def register(self, request):
+        ser = UserSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user = ser.save()
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+    # GET/PATCH /api/auth/me/
     @action(detail=False, methods=["get", "patch"])
     def me(self, request):
         user = request.user
