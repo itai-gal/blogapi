@@ -1,146 +1,130 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { apiFetch } from "../services/api";
-import { ENDPOINTS } from "../services/endpoints";
+import ENDPOINTS from "../services/endpoints";
+import { useAuth } from "../contexts/AuthContext";
+import { useLikes } from "../contexts/LikesContext";
 
-type Article = {
-    id: number;
-    title: string;
-    content: string;
-    likes_count?: number;
-    tag_names?: string[];
-};
+type Article = { id: number; title: string; content: string; likes_count?: number };
+type Paginated<T> = { count: number; next: string | null; previous: string | null; results: T[] };
+type MaybeArray<T> = T[] | Paginated<T> | { items?: T[] } | unknown;
 
-type PagedResponse<T> = {
-    count: number;
-    next: string | null;
-    previous: string | null;
-    results: T[];
-};
+const isArr = Array.isArray;
+
+function normalizeArticles(payload: MaybeArray<Article>): Article[] {
+    if (isArr(payload)) return payload as Article[];
+    if (payload && typeof payload === "object") {
+        const obj = payload as Record<string, unknown>;
+        if (isArr(obj.results as unknown[])) return obj.results as Article[];
+        if (isArr(obj.items as unknown[])) return obj.items as Article[];
+    }
+    return [];
+}
 
 const ArticlesListPage: React.FC = () => {
-    const [articles, setArticles] = useState<Article[]>([]);
-    const [loading, setLoading] = useState<boolean>(false);
-    const [page, setPage] = useState<number>(1);
-    const [hasMore, setHasMore] = useState<boolean>(false);
+    const { token } = useAuth();
+    const { has, refreshLikes } = useLikes();
 
-    const fetchedOnce = useRef(false);
-
-    const load = async (pageNum = 1) => {
-        setLoading(true);
-        try {
-            const url = `${ENDPOINTS.articles}?page=${pageNum}`;
-            const data = await apiFetch<PagedResponse<Article> | Article[]>(url);
-
-            if (Array.isArray(data)) {
-                setArticles(data);
-                setHasMore(false);
-            } else {
-                setArticles(data.results);
-                setHasMore(Boolean(data.next));
-            }
-        } catch {
-            toast.error("Failed to load articles");
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [items, setItems] = useState<Article[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [badShape, setBadShape] = useState<null | string>(null);
 
     useEffect(() => {
-        if (fetchedOnce.current) return;
-        fetchedOnce.current = true;
-        load(1);
-    }, []);
+        let alive = true;
+        (async () => {
+            setLoading(true);
+            setBadShape(null);
+            try {
+                const res = await apiFetch<MaybeArray<Article>>(ENDPOINTS.articles, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                });
+                const arr = normalizeArticles(res);
+                if (!isArr(arr)) {
+                    setBadShape("Response is not an array");
+                    if (alive) setItems([]);
+                } else if (alive) {
+                    setItems(arr);
+                }
+            } catch {
+                toast.error("Failed to load articles");
+                if (alive) {
+                    setItems([]);
+                    setBadShape("Network or server error");
+                }
+            } finally {
+                if (alive) setLoading(false);
+            }
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [token]);
 
-    const onNext = () => {
-        if (!hasMore) return;
-        const next = page + 1;
-        setPage(next);
-        load(next);
-    };
+    useEffect(() => {
+        if (!token) return;
+        refreshLikes().catch(() => { });
+    }, [token, refreshLikes]);
 
-    const onPrev = () => {
-        if (page <= 1) return;
-        const prev = page - 1;
-        setPage(prev);
-        load(prev);
-    };
+    const list = useMemo(() => (isArr(items) ? items : []), [items]);
+
+    if (loading) {
+        return (
+            <div className="panel" style={{ padding: 24 }}>
+                <div className="row" style={{ gap: 12, alignItems: "center" }}>
+                    <div className="badge">Loading…</div>
+                    <p className="muted" style={{ margin: 0 }}>Fetching articles</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (badShape) {
+        return (
+            <div className="panel" style={{ padding: 24 }}>
+                <h3 className="title" style={{ marginTop: 0 }}>Unexpected response</h3>
+                <p className="muted" style={{ marginBottom: 8 }}>{badShape}</p>
+                <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, opacity: 0.8 }}>
+                    {`Make sure /api/articles/ returns an array or `}
+                    {"{ results: [...] }"}
+                    {`.`}
+                </pre>
+            </div>
+        );
+    }
+
+    if (!list.length) {
+        return (
+            <div className="panel" style={{ padding: 24 }}>
+                <h3 className="title" style={{ marginTop: 0 }}>No articles yet</h3>
+                <p className="muted" style={{ marginBottom: 0 }}>Create one to get started.</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="stack" style={{ gap: 16 }}>
-            <div className="panel" style={{ padding: 16 }}>
-                <div
-                    className="row"
-                    style={{ justifyContent: "space-between", alignItems: "center" }}
-                >
-                    <h2 className="title" style={{ margin: 0 }}>
-                        Articles
-                    </h2>
-                    <div className="row" style={{ gap: 8 }}>
-                        <button className="btn ghost" onClick={() => load(page)} disabled={loading}>
-                            Refresh
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {loading && (
-                <div className="panel" style={{ padding: 24 }}>
-                    <div className="row" style={{ gap: 10, alignItems: "center" }}>
-                        <div className="badge">Loading…</div>
-                        <span className="muted">Fetching articles</span>
-                    </div>
-                </div>
-            )}
-
-            {!loading && articles.length === 0 && (
-                <div className="panel" style={{ padding: 24 }}>
-                    <p className="muted" style={{ margin: 0 }}>
-                        No articles yet.
-                    </p>
-                </div>
-            )}
-
-            <div
-                className="grid"
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-                    gap: 16,
-                }}
-            >
-                {articles.map((a) => (
-                    <Link key={a.id} to={`/articles/${a.id}`} className="card link" style={{ textDecoration: "none" }}>
-                        <div className="panel" style={{ padding: 16, height: "100%" }}>
-                            <h3 className="title" style={{ marginTop: 0, marginBottom: 8 }}>
-                                {a.title}
-                            </h3>
-                            <p className="muted" style={{ marginTop: 0, marginBottom: 12 }}>
-                                {a.content.length > 120 ? a.content.slice(0, 120) + "…" : a.content}
-                            </p>
-                            <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                                <span className="badge">{a.likes_count ?? 0} ❤</span>
-                                {a.tag_names && a.tag_names.length > 0 && (
-                                    <span className="muted" style={{ fontSize: 12 }}>
-                                        {a.tag_names.join(", ")}
-                                    </span>
-                                )}
+        <div className="stack" style={{ gap: 12 }}>
+            {list.map((a) => {
+                const liked = has(a.id);
+                return (
+                    <div key={a.id} className="panel" style={{ padding: 16 }}>
+                        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                            <Link to={`/articles/${a.id}`} className="link">
+                                <h3 className="title" style={{ margin: 0 }}>{a.title}</h3>
+                            </Link>
+                            <div className="row" style={{ gap: 8, alignItems: "center" }}>
+                                <span className={`badge ${liked ? "primary" : ""}`} title="Your like">
+                                    {liked ? "♥ Liked" : "♡"}
+                                </span>
+                                <span className="muted" title="Likes count">{a.likes_count ?? 0}</span>
                             </div>
                         </div>
-                    </Link>
-                ))}
-            </div>
-
-            <div className="row" style={{ gap: 8, justifyContent: "center" }}>
-                <button className="btn ghost" onClick={onPrev} disabled={loading || page <= 1}>
-                    Prev
-                </button>
-                <div className="badge">Page {page}</div>
-                <button className="btn ghost" onClick={onNext} disabled={loading || !hasMore}>
-                    Next
-                </button>
-            </div>
+                        <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+                            {a.content.length > 140 ? a.content.slice(0, 140) + "…" : a.content}
+                        </p>
+                    </div>
+                );
+            })}
         </div>
     );
 };

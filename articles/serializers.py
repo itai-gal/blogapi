@@ -1,107 +1,63 @@
 from rest_framework import serializers
-from .models import Article, Comment, Tag, PostUserLikes
-from drf_spectacular.utils import extend_schema_field, OpenApiTypes
+from django.contrib.auth.models import User
+from .models import Article, Comment, PostUserLikes
 
 
-class TagSerializer(serializers.ModelSerializer):
+# ==== Articles ====
+
+class AuthorTinySerializer(serializers.ModelSerializer):
     class Meta:
-        model = Tag
-        fields = ["id", "name"]
+        model = User
+        fields = ["id", "username"]
 
 
 class ArticleSerializer(serializers.ModelSerializer):
-    author_id = serializers.IntegerField(source="author.id", read_only=True)
-    tags = serializers.PrimaryKeyRelatedField(
-        queryset=Tag.objects.all(), many=True, required=False
-    )
-    tag_names = serializers.SerializerMethodField(read_only=True)
-    likes_count = serializers.SerializerMethodField(read_only=True)
+    author = AuthorTinySerializer(read_only=True)
 
     class Meta:
         model = Article
-        fields = [
-            "id",
-            "title",
-            "content",
-            "slug",
-            "tags",
-            "tag_names",
-            "likes_count",
-            "created_at",
-            "updated_at",
-            "author_id",
-        ]
-        read_only_fields = [
-            "id", "slug", "created_at", "updated_at", "author_id",
-            "tag_names", "likes_count",
-        ]
+        fields = ["id", "title", "content",
+                  "created_at", "updated_at", "author", "slug"]
+        read_only_fields = ["id", "created_at", "updated_at", "author", "slug"]
 
-    @extend_schema_field(
-        serializers.ListField(child=serializers.CharField())
-    )
-    def get_tag_names(self, obj):
-        return [t.name for t in obj.tags.all()]
 
-    @extend_schema_field(OpenApiTypes.INT)
-    def get_likes_count(self, obj):
-        return obj.likes.count()
-
+# ==== Comments (flat CRUD) ====
 
 class CommentSerializer(serializers.ModelSerializer):
-    author_id = serializers.IntegerField(source="author.id", read_only=True)
-    article = serializers.PrimaryKeyRelatedField(
-        queryset=Article.objects.all())
+    author = AuthorTinySerializer(read_only=True)
 
     class Meta:
         model = Comment
-        fields = [
-            "id",
-            "content",
-            "created_at",
-            "article",
-            "author_id",
-        ]
-        read_only_fields = ["id", "created_at", "author_id"]
+        fields = ["id", "article", "author", "content", "created_at"]
+        read_only_fields = ["id", "author", "created_at"]
 
-    def validate_content(self, value: str):
-        cleaned = (value or "").strip()
-        if not cleaned:
-            raise serializers.ValidationError("Content cannot be empty.")
-        return cleaned
 
+# ==== Comments (nested for /api/articles/<id>/comments/) ====
 
 class CommentCreateNestedRequestSerializer(serializers.Serializer):
-    content = serializers.CharField(max_length=10_000)
+    content = serializers.CharField()
 
-    def validate_content(self, value: str):
-        cleaned = (value or "").strip()
-        if not cleaned:
-            raise serializers.ValidationError("Content cannot be empty.")
-        return cleaned
+
+class CommentNestedAuthorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "username"]
 
 
 class CommentNestedResponseSerializer(serializers.ModelSerializer):
-    author_id = serializers.IntegerField(source="author.id", read_only=True)
-    article = serializers.PrimaryKeyRelatedField(read_only=True)
+    author = CommentNestedAuthorSerializer(read_only=True)
 
     class Meta:
         model = Comment
-        fields = [
-            "id",
-            "content",
-            "created_at",
-            "article",
-            "author_id",
-        ]
-        read_only_fields = ["id", "created_at", "article", "author_id"]
+        fields = ["id", "content", "created_at", "author"]
 
+
+# ==== Likes ====
 
 class PostUserLikesSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
-    article = serializers.PrimaryKeyRelatedField(
-        queryset=Article.objects.all())
 
     class Meta:
         model = PostUserLikes
-        fields = ["id", "user", "article"]
-        read_only_fields = ["id", "user"]
+        fields = ["id", "article", "user", "created_at"]
+        read_only_fields = ["id", "user", "created_at"]

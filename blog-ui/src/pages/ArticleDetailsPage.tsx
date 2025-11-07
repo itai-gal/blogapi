@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { apiFetch } from "../services/api";
-import { ENDPOINTS } from "../services/endpoints";
+import ENDPOINTS from "../services/endpoints";
+import { useAuth } from "../contexts/AuthContext";
+import { useLikes } from "../contexts/LikesContext";
 
 type Article = {
     id: number;
@@ -27,99 +29,136 @@ const Heart: React.FC<{ filled?: boolean; size?: number }> = ({ filled, size = 2
 const ArticleDetailsPage: React.FC = () => {
     const params = useParams();
     const id = Number(params.id);
+    const nav = useNavigate();
+    const { token } = useAuth();
+    const { setLocalLike } = useLikes();
 
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [liked, setLiked] = useState(false);
     const [likeId, setLikeId] = useState<number | null>(null);
     const [likesCount, setLikesCount] = useState<number>(0);
+    const [deleting, setDeleting] = useState(false);
 
-
-    // Guard למניעת כפל-fetch תחת StrictMode
-    const fetchedOnce = useRef(false);
-
-    const fetchLikeRowMine = async (articleId: number): Promise<LikeRow | null> => {
-        try {
-            const urlMine = `${ENDPOINTS.postUserLikes}?article=${articleId}&mine=1`;
-            const mine = await apiFetch<LikeRow[]>(urlMine);
-            if (Array.isArray(mine) && mine.length > 0) return mine[0];
-        } catch {
-            // fallback – אם אין תמיכה ב־mine=1, נסה להחזיר את השורה הראשונה ולסנן בצד לקוח לפי user (אם צריך)
-            try {
-                const url = `${ENDPOINTS.postUserLikes}?article=${articleId}`;
-                const rows = await apiFetch<LikeRow[]>(url);
-                if (Array.isArray(rows) && rows.length > 0) return rows[0];
-            } catch {
-                /* ignore */
-            }
-        }
-        return null;
-    };
-
-    const loadArticleAndLike = async () => {
-        setLoading(true);
-        try {
-            const a = await apiFetch<Article>(ENDPOINTS.article(id));
-            setArticle(a);
-            setLikesCount(a.likes_count ?? 0);
-
-            const mine = await fetchLikeRowMine(a.id);
-            if (mine) {
-                setLiked(true);
-                setLikeId(mine.id);
-            } else {
-                setLiked(false);
-                setLikeId(null);
-            }
-        } catch {
-            toast.error("Failed to load article");
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // --- Load article + my like status (Once id/token) ---
     useEffect(() => {
-        if (fetchedOnce.current) return;
-        fetchedOnce.current = true;
-        loadArticleAndLike();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id]);
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            try {
+                const a = await apiFetch<Article>(ENDPOINTS.article(id));
+                if (cancelled) return;
+                setArticle(a);
+                setLikesCount(a.likes_count ?? 0);
 
+                if (token) {
+                    try {
+                        const url = `${ENDPOINTS.postUserLikes}?article=${id}&mine=1`;
+                        const mine = await apiFetch<LikeRow[]>(url, {
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (cancelled) return;
+                        if (Array.isArray(mine) && mine.length > 0) {
+                            setLiked(true);
+                            setLikeId(mine[0].id);
+                        } else {
+                            setLiked(false);
+                            setLikeId(null);
+                        }
+                    } catch {
+                        // Don't fail the page if fetching "mine" failed
+                    }
+                } else {
+                    setLiked(false);
+                    setLikeId(null);
+                }
+            } catch {
+                if (!cancelled) toast.error("Failed to load article");
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [id, token]);
+
+    // --- Toggle like ---
     const onToggleLike = async () => {
         if (!article) return;
+        if (!token) { toast.error("You must be logged in"); return; }
 
         const optimisticLiked = !liked;
         setLiked(optimisticLiked);
-        setLikesCount((c) => c + (optimisticLiked ? 1 : -1));
+        setLikesCount(c => c + (optimisticLiked ? 1 : -1));
 
         try {
             if (optimisticLiked) {
-                // יצירת לייק
+                // create like
                 const row = await apiFetch<LikeRow>(ENDPOINTS.postUserLikes, {
                     method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
                     body: JSON.stringify({ article: article.id }),
-                } as RequestInit);
+                });
                 setLikeId(row.id);
+                setLocalLike(article.id, true);
                 toast.success("Liked");
             } else {
-                // הסרת לייק
+                // remove like
                 let toDeleteId = likeId;
                 if (!toDeleteId) {
-                    const mine = await fetchLikeRowMine(article.id);
-                    if (mine) toDeleteId = mine.id;
+                    try {
+                        const url = `${ENDPOINTS.postUserLikes}?article=${article.id}&mine=1`;
+                        const mine = await apiFetch<LikeRow[]>(url, {
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (mine.length) toDeleteId = mine[0].id;
+                    } catch {/* ignored */ }
                 }
                 if (toDeleteId) {
                     await apiFetch(ENDPOINTS.postUserLikeDetail(toDeleteId), {
                         method: "DELETE",
-                    } as RequestInit);
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+                    setLikeId(null);
                 }
-                toast("Unliked 💔");
+                setLocalLike(article.id, false);
+                toast("Unliked", { icon: "💔" });
             }
         } catch {
-            // החזרת מצב במקרה כשל
+            // revert on failure
             setLiked(!optimisticLiked);
-            setLikesCount((c) => c + (optimisticLiked ? -1 : 1));
+            setLikesCount(c => c + (optimisticLiked ? -1 : 1));
             toast.error("Action failed");
+        }
+    };
+
+    // --- Delete article (with confirm) ---
+    const onDelete = async () => {
+        if (!article) return;
+        if (!token) { toast.error("You must be logged in"); return; }
+        const ok = window.confirm("Delete this article?");
+        if (!ok) return;
+
+        setDeleting(true);
+        try {
+            await apiFetch(ENDPOINTS.article(article.id), {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            toast.success("Article deleted");
+            nav("/");
+        } catch (e: any) {
+            const msg =
+                typeof e?.message === "string" && e.message.startsWith("HTTP ")
+                    ? e.message === "HTTP 401" || e.message === "HTTP 403"
+                        ? "Not allowed"
+                        : "Delete failed"
+                    : "Delete failed";
+            toast.error(msg);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -127,21 +166,33 @@ const ArticleDetailsPage: React.FC = () => {
         () => (
             <div className="panel stack" style={{ marginBottom: 16 }}>
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                    <h2 className="title" style={{ margin: 0 }}>{article?.title || "Article"}</h2>
-                    <button
-                        className={`btn icon ${liked ? "primary" : "ghost"}`}
-                        aria-pressed={liked}
-                        aria-label={liked ? "Unlike" : "Like"}
-                        onClick={onToggleLike}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                    >
-                        <Heart filled={liked} />
-                        <span>{likesCount}</span>
-                    </button>
+                    <h2 className="title" style={{ margin: 0 }}>
+                        {article?.title || "Article"}
+                    </h2>
+                    <div className="row" style={{ gap: 8 }}>
+                        <button
+                            className={`btn icon ${liked ? "primary" : "ghost"}`}
+                            aria-pressed={liked}
+                            aria-label={liked ? "Unlike" : "Like"}
+                            onClick={onToggleLike}
+                            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                        >
+                            <Heart filled={liked} />
+                            <span>{likesCount}</span>
+                        </button>
+                        <button
+                            className={`btn danger ${deleting ? "disabled" : ""}`}
+                            onClick={onDelete}
+                            disabled={deleting}
+                            title="Delete article"
+                        >
+                            {deleting ? "Deleting…" : "Delete"}
+                        </button>
+                    </div>
                 </div>
             </div>
         ),
-        [article?.title, liked, likesCount]
+        [article?.title, liked, likesCount, deleting]
     );
 
     if (loading) {

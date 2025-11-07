@@ -1,20 +1,14 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import toast from "react-hot-toast";
 
-type Props = { children: React.ReactNode };
-
-const ProtectedRoute: React.FC<Props> = ({ children }) => {
+const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user } = useAuth();
     const loc = useLocation();
-
     if (!user) {
-        toast.error("Please login to continue");
         return <Navigate to="/login" replace state={{ from: loc }} />;
     }
-
     return <>{children}</>;
 };
 
-export default ProtectedRoute;
+export default RequireAuth;
