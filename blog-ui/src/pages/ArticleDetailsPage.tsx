@@ -4,13 +4,13 @@ import toast from "react-hot-toast";
 import { apiFetch } from "../services/api";
 import ENDPOINTS from "../services/endpoints";
 import { useAuth } from "../contexts/AuthContext";
-import { useLikes } from "../contexts/LikesContext";
 
 type Article = {
     id: number;
     title: string;
     content: string;
     likes_count?: number;
+    user_liked?: boolean;
 };
 
 type LikeRow = { id: number; user: number; article: number };
@@ -31,115 +31,100 @@ const ArticleDetailsPage: React.FC = () => {
     const id = Number(params.id);
     const nav = useNavigate();
     const { token } = useAuth();
-    const { setLocalLike } = useLikes();
 
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [liked, setLiked] = useState(false);
+    const [likesCount, setLikesCount] = useState(0);
     const [likeId, setLikeId] = useState<number | null>(null);
-    const [likesCount, setLikesCount] = useState<number>(0);
     const [deleting, setDeleting] = useState(false);
 
-    // --- Load article + my like status (Once id/token) ---
     useEffect(() => {
-        let cancelled = false;
         (async () => {
             setLoading(true);
             try {
-                const a = await apiFetch<Article>(ENDPOINTS.article(id));
-                if (cancelled) return;
+                const a = await apiFetch<Article>(ENDPOINTS.article(id), {
+                    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                });
                 setArticle(a);
                 setLikesCount(a.likes_count ?? 0);
+                setLiked(!!a.user_liked);
 
                 if (token) {
                     try {
-                        const url = `${ENDPOINTS.postUserLikes}?article=${id}&mine=1`;
-                        const mine = await apiFetch<LikeRow[]>(url, {
-                            headers: { Authorization: `Bearer ${token}` },
-                        });
-                        if (cancelled) return;
-                        if (Array.isArray(mine) && mine.length > 0) {
-                            setLiked(true);
-                            setLikeId(mine[0].id);
-                        } else {
-                            setLiked(false);
-                            setLikeId(null);
-                        }
+                        const mine = await apiFetch<LikeRow[]>(
+                            `${ENDPOINTS.postUserLikes}?article=${id}&mine=1`,
+                            { headers: { Authorization: `Bearer ${token}` } }
+                        );
+                        setLikeId(mine[0]?.id ?? null);
                     } catch {
-                        // Don't fail the page if fetching "mine" failed
+                        setLikeId(null);
                     }
                 } else {
-                    setLiked(false);
                     setLikeId(null);
                 }
             } catch {
-                if (!cancelled) toast.error("Failed to load article");
+                toast.error("Failed to load article");
             } finally {
-                if (!cancelled) setLoading(false);
+                setLoading(false);
             }
         })();
-        return () => { cancelled = true; };
     }, [id, token]);
 
-    // --- Toggle like ---
     const onToggleLike = async () => {
         if (!article) return;
-        if (!token) { toast.error("You must be logged in"); return; }
-
-        const optimisticLiked = !liked;
-        setLiked(optimisticLiked);
-        setLikesCount(c => c + (optimisticLiked ? 1 : -1));
+        if (!token) {
+            toast.error("You must be logged in");
+            return;
+        }
+        const optimistic = !liked;
+        setLiked(optimistic);
+        setLikesCount((c) => c + (optimistic ? 1 : -1));
 
         try {
-            if (optimisticLiked) {
-                // create like
+            if (optimistic) {
                 const row = await apiFetch<LikeRow>(ENDPOINTS.postUserLikes, {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                     body: JSON.stringify({ article: article.id }),
                 });
                 setLikeId(row.id);
-                setLocalLike(article.id, true);
                 toast.success("Liked");
             } else {
-                // remove like
-                let toDeleteId = likeId;
-                if (!toDeleteId) {
+                let toDelete = likeId;
+                if (!toDelete) {
                     try {
-                        const url = `${ENDPOINTS.postUserLikes}?article=${article.id}&mine=1`;
-                        const mine = await apiFetch<LikeRow[]>(url, {
-                            headers: { Authorization: `Bearer ${token}` },
-                        });
-                        if (mine.length) toDeleteId = mine[0].id;
-                    } catch {/* ignored */ }
+                        const mine = await apiFetch<LikeRow[]>(
+                            `${ENDPOINTS.postUserLikes}?article=${article.id}&mine=1`,
+                            { headers: { Authorization: `Bearer ${token}` } }
+                        );
+                        toDelete = mine[0]?.id ?? null;
+                    } catch { }
                 }
-                if (toDeleteId) {
-                    await apiFetch(ENDPOINTS.postUserLikeDetail(toDeleteId), {
+                if (toDelete) {
+                    await apiFetch(ENDPOINTS.postUserLikeDetail(toDelete), {
                         method: "DELETE",
                         headers: { Authorization: `Bearer ${token}` },
                     });
                     setLikeId(null);
                 }
-                setLocalLike(article.id, false);
                 toast("Unliked", { icon: "💔" });
             }
         } catch {
             // revert on failure
-            setLiked(!optimisticLiked);
-            setLikesCount(c => c + (optimisticLiked ? -1 : 1));
+            setLiked(!optimistic);
+            setLikesCount((c) => c + (optimistic ? -1 : 1));
             toast.error("Action failed");
         }
     };
 
-    // --- Delete article (with confirm) ---
     const onDelete = async () => {
         if (!article) return;
-        if (!token) { toast.error("You must be logged in"); return; }
-        const ok = window.confirm("Delete this article?");
-        if (!ok) return;
+        if (!token) {
+            toast.error("You must be logged in");
+            return;
+        }
+        if (!window.confirm("Delete this article?")) return;
 
         setDeleting(true);
         try {
@@ -166,9 +151,7 @@ const ArticleDetailsPage: React.FC = () => {
         () => (
             <div className="panel stack" style={{ marginBottom: 16 }}>
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                    <h2 className="title" style={{ margin: 0 }}>
-                        {article?.title || "Article"}
-                    </h2>
+                    <h2 className="title" style={{ margin: 0 }}>{article?.title || "Article"}</h2>
                     <div className="row" style={{ gap: 8 }}>
                         <button
                             className={`btn icon ${liked ? "primary" : "ghost"}`}
