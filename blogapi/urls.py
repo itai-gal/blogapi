@@ -7,7 +7,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
     SpectacularRedocView,
 )
-from articles.views import ArticleViewSet, CommentViewSet, PostUserLikesViewSet, ArticleCommentsView
+from articles.views import ArticleViewSet, CommentViewSet, PostUserLikesViewSet
 from users.views import AuthViewSet, UserProfileViewSet
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -15,7 +15,7 @@ router = DefaultRouter()
 router.register(r"articles", ArticleViewSet, basename="article")
 router.register(r"comments", CommentViewSet, basename="comment")
 router.register(r"post-user-likes", PostUserLikesViewSet,
-                basename="postuserlikes")
+                basename="post-user-likes")
 router.register(r"auth", AuthViewSet, basename="auth")
 router.register(r"user-profiles", UserProfileViewSet, basename="userprofile")
 
@@ -45,8 +45,4 @@ urlpatterns = [
             url_name="schema", permission_classes=[AllowAny]),
         name="redoc",
     ),
-
-    # Nested comments
-    path("api/articles/<int:article_id>/comments/",
-         ArticleCommentsView.as_view(), name="article-comments"),
 ]
