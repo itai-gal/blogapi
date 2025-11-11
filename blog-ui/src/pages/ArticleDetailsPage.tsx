@@ -11,6 +11,7 @@ type Article = {
     content: string;
     likes_count?: number;
     user_liked?: boolean;
+    author_username?: string;
 };
 
 type LikeRow = { id: number; user: number; article: number };
@@ -39,7 +40,16 @@ const ArticleDetailsPage: React.FC = () => {
     const [likeId, setLikeId] = useState<number | null>(null);
     const [deleting, setDeleting] = useState(false);
 
+    // Guard: invalid id in URL (e.g., NaN)
+    const invalidId = Number.isNaN(id);
+
     useEffect(() => {
+        if (invalidId) {
+            setLoading(false);
+            setArticle(null);
+            return;
+        }
+
         (async () => {
             setLoading(true);
             try {
@@ -69,7 +79,7 @@ const ArticleDetailsPage: React.FC = () => {
                 setLoading(false);
             }
         })();
-    }, [id, token]);
+    }, [id, token, invalidId]);
 
     const onToggleLike = async () => {
         if (!article) return;
@@ -77,43 +87,56 @@ const ArticleDetailsPage: React.FC = () => {
             toast.error("You must be logged in");
             return;
         }
-        const optimistic = !liked;
-        setLiked(optimistic);
-        setLikesCount((c) => c + (optimistic ? 1 : -1));
+
+        const willLike = !liked;
+        // optimistic UI
+        setLiked(willLike);
+        setLikesCount((c) => c + (willLike ? 1 : -1));
 
         try {
-            if (optimistic) {
+            if (willLike) {
+                // Create like
                 const row = await apiFetch<LikeRow>(ENDPOINTS.postUserLikes, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
                     body: JSON.stringify({ article: article.id }),
                 });
                 setLikeId(row.id);
                 toast.success("Liked");
             } else {
-                let toDelete = likeId;
-                if (!toDelete) {
-                    try {
-                        const mine = await apiFetch<LikeRow[]>(
-                            `${ENDPOINTS.postUserLikes}?article=${article.id}&mine=1`,
-                            { headers: { Authorization: `Bearer ${token}` } }
-                        );
-                        toDelete = mine[0]?.id ?? null;
-                    } catch { }
-                }
-                if (toDelete) {
-                    await apiFetch(ENDPOINTS.postUserLikeDetail(toDelete), {
+                // Unlike via custom route
+                try {
+                    await apiFetch(ENDPOINTS.postUserLikesByArticle(article.id), {
                         method: "DELETE",
                         headers: { Authorization: `Bearer ${token}` },
                     });
                     setLikeId(null);
+                    toast("Unliked", { icon: "💔" });
+                } catch {
+                    // Fallback: find my like row and delete by id
+                    const mine = await apiFetch<LikeRow[]>(
+                        `${ENDPOINTS.postUserLikes}?article=${article.id}&mine=1`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    const rowId = mine[0]?.id;
+                    if (!rowId) {
+                        throw new Error("Like row not found");
+                    }
+                    await apiFetch(ENDPOINTS.postUserLikeDetail(rowId), {
+                        method: "DELETE",
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
+                    setLikeId(null);
+                    toast("Unliked", { icon: "💔" });
                 }
-                toast("Unliked", { icon: "💔" });
             }
         } catch {
             // revert on failure
-            setLiked(!optimistic);
-            setLikesCount((c) => c + (optimistic ? -1 : 1));
+            setLiked(!willLike);
+            setLikesCount((c) => c + (willLike ? -1 : 1));
             toast.error("Action failed");
         }
     };
@@ -177,6 +200,14 @@ const ArticleDetailsPage: React.FC = () => {
         ),
         [article?.title, liked, likesCount, deleting]
     );
+
+    if (invalidId) {
+        return (
+            <div className="panel" style={{ padding: 24 }}>
+                <h3 className="title" style={{ margin: 0 }}>Invalid article id</h3>
+            </div>
+        );
+    }
 
     if (loading) {
         return (

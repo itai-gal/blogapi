@@ -32,7 +32,7 @@ const Heart: React.FC<{ filled?: boolean; size?: number }> = ({ filled, size = 1
     </svg>
 );
 
-// organizing by sorting options
+// Sorting options for backend ordering
 const ORDERING_OPTIONS = [
     { v: "-created_at", label: "Newest" },
     { v: "created_at", label: "Oldest" },
@@ -40,7 +40,7 @@ const ORDERING_OPTIONS = [
     { v: "title", label: "Title A→Z" },
 ];
 
-// Normalizing response: either a paginated page or a simple array
+// Normalize API response (supports both paginated and plain arrays)
 function normalizePage<T>(data: unknown): Page<T> {
     if (Array.isArray(data)) {
         const arr = data as T[];
@@ -55,7 +55,6 @@ function normalizePage<T>(data: unknown): Page<T> {
             results: obj.results as T[],
         };
     }
-    // fallback (empty page)
     return { count: 0, next: null, previous: null, results: [] };
 }
 
@@ -75,14 +74,13 @@ const ArticlesListPage: React.FC = () => {
     const ordering = params.get("ordering") ?? "-created_at";
     const pageNum = params.get("page") ?? "1";
 
-    // building the API URL with query parameters
+    // Build API path with query params
     const listPath = React.useMemo(() => {
         const qs = new URLSearchParams();
         if (query) qs.set("search", query);
         if (ordering) qs.set("ordering", ordering);
         if (pageNum) qs.set("page", pageNum);
         const qstr = qs.toString();
-        // ENDPOINTS.articles should be something like "/api/articles/"
         return qstr ? `${ENDPOINTS.articles}?${qstr}` : ENDPOINTS.articles;
     }, [query, ordering, pageNum]);
 
@@ -124,11 +122,10 @@ const ArticlesListPage: React.FC = () => {
         setParams(next);
     };
 
-    // Navigating between pages returned by the server (next/previous are full server URLs)
+    // Navigate using server-provided next/previous absolute URLs
     const go = (href: string | null) => {
         if (!href) return;
         const u = new URL(href, window.location.origin);
-        // Pulling only the query and updating the front-end URL
         setParams(u.searchParams);
     };
 
@@ -150,7 +147,8 @@ const ArticlesListPage: React.FC = () => {
                             </option>
                         ))}
                     </select>
-                    <Link className="btn primary" to="/articles/new">
+
+                    <Link className="btn primary" to="/articles/create">
                         New Article
                     </Link>
                 </div>

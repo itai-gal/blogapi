@@ -1,6 +1,8 @@
-from django.db.models import Count, Exists, OuterRef, Value, BooleanField
+from django.db.models import Count, Exists, OuterRef, Value, BooleanField, Q
 from django.contrib.auth.models import User
-from rest_framework import viewsets, mixins, permissions, filters
+from rest_framework import viewsets, mixins, permissions, filters, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 
 from .models import Article, Comment, PostUserLikes
@@ -15,7 +17,7 @@ class DefaultPagination(PageNumberPagination):
 
 
 def _get_userprofile_for_request(request):
-    user = getattr(request, "user", None)
+    user = request.user
     if not user or not user.is_authenticated:
         return None
     prof = getattr(user, "profile", None) or getattr(user, "userprofile", None)
@@ -26,10 +28,10 @@ def _get_userprofile_for_request(request):
 
 class ArticleViewSet(viewsets.ModelViewSet):
     """
-    CRUD for articles + annotated returns of likes_count and user_liked.
-    Supports filtering/searching/sorting:
-      ?search=… => searches in title and content
-      ?ordering=-created_at / created_at / -likes_count / title
+    CRUD for articles + annotated fields: likes_count, user_liked.
+    Supports:
+      ?search=…  (title/content)
+      ?ordering=-created_at|created_at|-likes_count|likes_count|title|-title
     """
     serializer_class = ArticleSerializer
     permission_classes = [permissions.AllowAny]
@@ -40,10 +42,15 @@ class ArticleViewSet(viewsets.ModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        qs = Article.objects.all().annotate(
-            likes_count=Count("likes", distinct=True)
+        # likes_count
+        qs = (
+            Article.objects.all()
+            .select_related("author")
+            .prefetch_related("likes")
+            .annotate(likes_count=Count("likes", distinct=True))
         )
 
+        # user liked
         prof = _get_userprofile_for_request(self.request)
         if prof is not None:
             like_exists = PostUserLikes.objects.filter(
@@ -54,6 +61,14 @@ class ArticleViewSet(viewsets.ModelViewSet):
         else:
             qs = qs.annotate(user_liked=Value(
                 False, output_field=BooleanField()))
+
+        ordering = self.request.query_params.get("ordering")
+        allowed = {"created_at", "-created_at",
+                   "likes_count", "-likes_count", "title", "-title"}
+        if ordering in allowed:
+            qs = qs.order_by(ordering)
+        else:
+            qs = qs.order_by("-created_at")
 
         return qs
 
@@ -79,11 +94,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
 class CommentViewSet(viewsets.ModelViewSet):
     """
-    CRUD for comments, with filtering by article ID.
-    - GET /comments/?article=ID  => comments for a specific article
-    - POST /comments/              => create a new comment
-    - PUT /comments/{id}/          => update an existing comment
-    - DELETE /comments/{id}/       => delete a comment
+    CRUD for comments; filter by article with ?article=<id>
     """
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -124,11 +135,12 @@ class PostUserLikesViewSet(
     viewsets.GenericViewSet
 ):
     """
-    crud likes of users to articles.
-    - GET /post-user-likes/?mine=1    => returns only the current user's likes
-    - GET /post-user-likes/?article=ID => likes for a specific article (e.g. to find mine)
-    - POST { "article": <id> }        => create a like (unique per user+article)
-    - DELETE /post-user-likes/{id}/   => remove a like
+    Likes endpoints:
+      - GET /post-user-likes/?mine=1           => current user's likes
+      - GET /post-user-likes/?article=<id>     => likes for a specific article
+      - POST { "article": <id> }               => like (unique per user+article)
+      - DELETE /post-user-likes/{id}/          => unlike by like-row id
+      - DELETE /post-user-likes/by-article/<article_id>/ => unlike by article id (current user)
     """
     serializer_class = PostUserLikeSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -156,3 +168,17 @@ class PostUserLikesViewSet(
         if prof is None:
             raise permissions.PermissionDenied("Authentication required")
         serializer.save(user=prof)
+
+    @action(detail=False, methods=["delete"], url_path=r"by-article/(?P<article_id>\d+)")
+    def by_article(self, request, article_id=None):
+        """
+        DELETE /api/post-user-likes/by-article/<article_id>/
+        Removes the current user's like for that article (idempotent).
+        """
+        prof = _get_userprofile_for_request(request)
+        if prof is None:
+            return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        PostUserLikes.objects.filter(
+            user_id=prof.id, article_id=article_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

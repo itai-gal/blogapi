@@ -1,4 +1,3 @@
-// src/services/endpoints.ts
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
 export const ENDPOINTS = {
@@ -14,9 +13,16 @@ export const ENDPOINTS = {
     // --- Articles / Likes / Comments ---
     articles: `${API_BASE}/api/articles/`,
     article: (id: number) => `${API_BASE}/api/articles/${id}/`,
+
     postUserLikes: `${API_BASE}/api/post-user-likes/`,
     postUserLikeDetail: (id: number) => `${API_BASE}/api/post-user-likes/${id}/`,
+
+    // ✅ FIXED: add /api prefix here
+    postUserLikesByArticle: (articleId: number) =>
+        `${API_BASE}/api/post-user-likes/by-article/${articleId}/`,
+
     comments: `${API_BASE}/api/comments/`,
+
     articleComments: (articleId: number) =>
         `${API_BASE}/api/articles/${articleId}/comments/`,
 };

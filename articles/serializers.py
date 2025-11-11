@@ -22,8 +22,15 @@ class ArticleSerializer(serializers.ModelSerializer):
             "likes_count",
             "user_liked",
         ]
-        read_only_fields = ("id", "author", "slug", "created_at",
-                            "updated_at", "likes_count", "user_liked")
+        read_only_fields = (
+            "id",
+            "author",
+            "slug",
+            "created_at",
+            "updated_at",
+            "likes_count",
+            "user_liked",
+        )
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -52,4 +59,5 @@ class PostUserLikeSerializer(serializers.ModelSerializer):
             return super().create(validated_data)
         except IntegrityError:
             raise serializers.ValidationError(
-                {"article": ["You already liked this article."]})
+                {"article": ["You already liked this article."]}
+            )

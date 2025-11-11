@@ -1,136 +1,191 @@
-// src/pages/ArticleCreatePage.tsx
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import { useNavigate, Link } from "react-router-dom";
 import { apiFetch } from "../services/api";
 import ENDPOINTS from "../services/endpoints";
 import { useAuth } from "../contexts/AuthContext";
-import type { ArticleFormValues } from "../components/ArticleForm";
 
-type CreatePayload = {
+
+type ArticleDTO = {
+    id: number;
+    title: string;
+    content: string;
+    slug?: string;
+    created_at?: string;
+    updated_at?: string;
+};
+
+type FormState = {
     title: string;
     content: string;
 };
 
-const MIN_TITLE = 3;
-const MIN_CONTENT = 10;
-const MAX_TITLE = 120;
+type FieldErrors = Record<string, string[]>;
 
 const ArticleCreatePage: React.FC = () => {
-    const nav = useNavigate();
     const { token } = useAuth();
+    const navigate = useNavigate();
 
-    const [form, setForm] = useState<CreatePayload>({ title: "", content: "" });
+    const [form, setForm] = useState<FormState>({ title: "", content: "" });
     const [submitting, setSubmitting] = useState(false);
+    const [errors, setErrors] = useState<FieldErrors>({});
+    const [apiError, setApiError] = useState<string | null>(null);
 
-    const titleErr = useMemo(() => {
-        if (!form.title.trim()) return "Title is required";
-        if (form.title.trim().length < MIN_TITLE) return `Title must be at least ${MIN_TITLE} chars`;
-        if (form.title.trim().length > MAX_TITLE) return `Title must be <= ${MAX_TITLE} chars`;
-        return "";
-    }, [form.title]);
+    // Build endpoint (POST to /api/articles/)
+    const createUrl = useMemo(() => ENDPOINTS.articles, []);
 
-    const contentErr = useMemo(() => {
-        if (!form.content.trim()) return "Content is required";
-        if (form.content.trim().length < MIN_CONTENT) return `Content must be at least ${MIN_CONTENT} chars`;
-        return "";
-    }, [form.content]);
+    const onChange =
+        (field: keyof FormState) =>
+            (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+                setForm((prev) => ({ ...prev, [field]: e.target.value }));
+                // Clear field-level error as user edits
+                if (errors[field]) {
+                    setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next[field];
+                        return next;
+                    });
+                }
+            };
 
-    const isValid = !titleErr && !contentErr;
+    const validateClient = (): boolean => {
+        const next: FieldErrors = {};
+        if (!form.title.trim()) next.title = ["Title is required."];
+        if (!form.content.trim()) next.content = ["Content is required."];
+        setErrors(next);
+        return Object.keys(next).length === 0;
+    };
 
-    async function onSubmit(e: React.FormEvent) {
+    const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!token) {
-            toast.error("You must be logged in");
-            return;
-        }
-        if (!isValid) {
-            toast.error("Please fix validation errors");
-            return;
-        }
+        setApiError(null);
+
+        // Client-side quick validation
+        if (!validateClient()) return;
 
         setSubmitting(true);
         try {
-            const created = await apiFetch<{ id: number }>(ENDPOINTS.articles, {
+            const body = {
+                title: form.title.trim(),
+                content: form.content.trim(),
+            };
+
+            const created = await apiFetch<ArticleDTO>(createUrl, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({
-                    title: form.title.trim(),
-                    content: form.content.trim(),
-                }),
+                body: JSON.stringify(body),
             });
 
-            toast.success("Article created");
-            if (created?.id) {
-                nav(`/articles/${created.id}`);
-            } else {
-                nav("/");
+            // Defensive: ensure we have a numeric id
+            const newId = Number((created as any)?.id);
+            if (!newId || Number.isNaN(newId)) {
+                // If the serializer didn't return id, fall back to list page
+                console.warn("Create succeeded but response missing numeric id:", created);
+                navigate("/articles", { replace: true });
+                return;
             }
+
+            // Navigate to details page of the newly created article
+            navigate(`/articles/${newId}`, { replace: true });
         } catch (err: any) {
-            const msg =
-                typeof err?.message === "string" && err.message.startsWith("HTTP ")
-                    ? err.message === "HTTP 401"
-                        ? "Unauthorized – please login"
-                        : "Failed to create article"
-                    : "Failed to create article";
-            toast.error(msg);
+            // apiFetch throws with parsed json if available -> might be {field: ["error", ...]}
+            if (err && typeof err === "object") {
+                // DRF field errors
+                const fieldErrs: FieldErrors = {};
+                let hasFieldErrors = false;
+                for (const k of Object.keys(err)) {
+                    const val = (err as any)[k];
+                    if (Array.isArray(val)) {
+                        fieldErrs[k] = val.map(String);
+                        hasFieldErrors = true;
+                    }
+                }
+                if (hasFieldErrors) {
+                    setErrors(fieldErrs);
+                } else if (err.detail) {
+                    setApiError(String(err.detail));
+                } else {
+                    setApiError("Failed to create article. Please try again.");
+                }
+            } else {
+                setApiError("Failed to create article. Please try again.");
+            }
         } finally {
             setSubmitting(false);
         }
-    }
+    };
 
     return (
-        <div className="panel" style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
-            <h2 className="title" style={{ marginBottom: 16 }}>Create Article</h2>
+        <div className="stack" style={{ gap: 12 }}>
+            <div className="row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+                <h2 style={{ margin: 0 }}>Create Article</h2>
+                <Link className="btn ghost" to="/">Back to list</Link>
+            </div>
 
-            <form onSubmit={onSubmit} className="stack" style={{ gap: 12 }}>
+            <form className="panel stack" style={{ gap: 12, padding: 16 }} onSubmit={onSubmit} noValidate>
+                {/* Global API error */}
+                {apiError && (
+                    <div className="badge danger" role="alert">
+                        {apiError}
+                    </div>
+                )}
+
                 <div className="stack" style={{ gap: 6 }}>
-                    <label className="muted" htmlFor="title">
-                        Title {form.title.length ? `(${form.title.trim().length}/${MAX_TITLE})` : ""}
-                    </label>
+                    <label htmlFor="title"><strong>Title</strong></label>
                     <input
                         id="title"
-                        className={`input ${titleErr ? "error" : ""}`}
-                        placeholder="Awesome article title"
+                        className={`input ${errors.title ? "input-error" : ""}`}
+                        placeholder="Enter a title…"
                         value={form.title}
-                        maxLength={MAX_TITLE + 1}
-                        onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
-                    {titleErr && <small className="muted" style={{ color: "var(--danger, #c33)" }}>{titleErr}</small>}
+                        onChange={onChange("title")}
+                        disabled={submitting}
+                    />
+                    {errors.title && (
+                        <ul className="muted" style={{ margin: 0, paddingLeft: 18 }}>
+                            {errors.title.map((m, i) => (
+                                <li key={i}>{m}</li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
 
                 <div className="stack" style={{ gap: 6 }}>
-                    <label className="muted" htmlFor="content">Content</label>
+                    <label htmlFor="content"><strong>Content</strong></label>
                     <textarea
                         id="content"
-                        className={`input ${contentErr ? "error" : ""}`}
-                        placeholder="Write something meaningful…"
-                        rows={10}
+                        className={`input ${errors.content ? "input-error" : ""}`}
+                        placeholder="Write your article content…"
                         value={form.content}
-                        onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                        style={{ resize: "vertical" }}
+                        onChange={onChange("content")}
+                        rows={10}
+                        disabled={submitting}
                     />
-                    {contentErr && <small className="muted" style={{ color: "var(--danger, #c33)" }}>{contentErr}</small>}
+                    {errors.content && (
+                        <ul className="muted" style={{ margin: 0, paddingLeft: 18 }}>
+                            {errors.content.map((m, i) => (
+                                <li key={i}>{m}</li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
 
-                <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                <div className="row" style={{ gap: 8 }}>
                     <button
-                        type="button"
-                        className="btn ghost"
-                        onClick={() => nav(-1)}
-                        disabled={submitting}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        className={`btn primary ${!isValid || submitting ? "disabled" : ""}`}
-                        disabled={!isValid || submitting}
+                        type="submit"
+                        className="btn primary"
+                        disabled={submitting || !form.title.trim() || !form.content.trim()}
                     >
                         {submitting ? "Creating…" : "Create"}
                     </button>
+                    <Link className="btn ghost" to="/">Cancel</Link>
                 </div>
+
+                {/* Small helper text */}
+                <p className="muted" style={{ margin: 0 }}>
+                    Note: author is set on the server from your authenticated user; slug is auto-generated.
+                </p>
             </form>
         </div>
     );
