@@ -5,6 +5,7 @@ import React, {
     useMemo,
     useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../services/api";
 import ENDPOINTS from "../services/endpoints";
 
@@ -17,71 +18,47 @@ type AuthContextValue = {
     user: Me["user"] | null;
     token: string | null;
     login: (username: string, password: string) => Promise<void>;
-    register: (
-        username: string,
-        password: string,
-        email?: string | null
-    ) => Promise<void>;
+    register: (username: string, password: string, email?: string | null) => Promise<void>;
     logout: () => void;
-    refreshMe: () => Promise<void>;
+    refreshMe: (overrideToken?: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const navigate = useNavigate();
+
     const [token, setToken] = useState<string | null>(
         () => localStorage.getItem("access") || null
     );
     const [user, setUser] = useState<Me["user"] | null>(null);
 
-    useEffect(() => {
-        if (!token) {
-            setUser(null);
-            return;
-        }
-        // load /auth/me with Authorization Bearer
-        refreshMe().catch(() => {
-            localStorage.removeItem("access");
-            setToken(null);
-            setUser(null);
-        });
-    }, [token]);
-
-    async function refreshMe() {
-        if (!token) return;
+    // --- helpers ---
+    async function refreshMe(overrideToken?: string) {
+        const tkn = overrideToken ?? token;
+        if (!tkn) return;
         const me = await apiFetch<Me>(ENDPOINTS.me, {
             method: "GET",
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${tkn}` },
         });
         setUser(me.user);
     }
 
     async function login(username: string, password: string) {
-        const res = await apiFetch<{ access: string; refresh: string }>(
-            ENDPOINTS.tokenObtain,
-            {
-                method: "POST",
-                body: JSON.stringify({
-                    username: username.trim(),
-                    password,
-                }),
-            }
-        );
+        const res = await apiFetch<{ access: string; refresh: string }>(ENDPOINTS.tokenObtain, {
+            method: "POST",
+            body: JSON.stringify({ username: username.trim(), password }),
+        });
         localStorage.setItem("access", res.access);
         setToken(res.access);
-        await refreshMe();
+        // refresh user info
+        await refreshMe(res.access);
     }
 
-    async function register(
-        username: string,
-        password: string,
-        email?: string | null
-    ) {
+    async function register(username: string, password: string, email?: string | null) {
         const trimmedUsername = (username ?? "").trim();
-        const trimmedEmail =
-            email && typeof email === "string" ? email.trim() : "";
+        const trimmedEmail = email && typeof email === "string" ? email.trim() : "";
 
-        // Registration is done against /api/auth/ (AuthViewSet.create)
         await apiFetch(ENDPOINTS.register, {
             method: "POST",
             body: JSON.stringify({
@@ -91,7 +68,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             }),
         });
 
-        // Automatic login after successful registration
+        // autologin after registration
         await login(trimmedUsername, password);
     }
 
@@ -99,7 +76,20 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         localStorage.removeItem("access");
         setToken(null);
         setUser(null);
+        navigate("/", { replace: true });
     }
+
+    useEffect(() => {
+        if (!token) {
+            setUser(null);
+            return;
+        }
+        refreshMe().catch(() => {
+            localStorage.removeItem("access");
+            setToken(null);
+            setUser(null);
+        });
+    }, [token]);
 
     const value = useMemo<AuthContextValue>(
         () => ({ user, token, login, register, logout, refreshMe }),
